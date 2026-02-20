@@ -8,6 +8,7 @@ import { Plus, MapPin, Clock, AlertCircle } from "lucide-react";
 import { format, isPast, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import TaskFormDialog from "@/components/TaskFormDialog";
+import TaskActionButtons from "@/components/TaskActionButtons";
 import type { Database } from "@/integrations/supabase/types";
 
 type Task = Database["public"]["Tables"]["tasks"]["Row"];
@@ -177,6 +178,13 @@ export default function Tasks() {
                   {task.observations && (
                     <p className="mt-2 text-xs text-muted-foreground line-clamp-2">{task.observations}</p>
                   )}
+
+                  {/* Action buttons */}
+                  <TaskActionButtons
+                    taskId={task.id}
+                    currentStatus={task.status}
+                    onUpdated={fetchTasks}
+                  />
                 </CardContent>
               </Card>
             );
