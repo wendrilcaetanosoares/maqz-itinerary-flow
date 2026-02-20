@@ -1,9 +1,10 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Loader2, LayoutDashboard, ListTodo, Calendar, Users, Building2, LogOut } from "lucide-react";
+import { Loader2, LayoutDashboard, ListTodo, Calendar, Users, Building2, LogOut, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useNotifications } from "@/hooks/useNotifications";
 
 const navItems = [
   { label: "Painel", icon: LayoutDashboard, path: "/" },
@@ -14,10 +15,12 @@ const navItems = [
 ];
 
 export default function AppLayout() {
-  const { session, loading, profile, isAdmin, signOut } = useAuth();
+  const { session, loading, profile, isAdmin, user, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+
+  const { requestPermission } = useNotifications(user?.id);
 
   if (loading) {
     return (
@@ -57,9 +60,16 @@ export default function AppLayout() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">M</div>
             <span className="font-semibold text-foreground">Maqz</span>
           </div>
-          <Button variant="ghost" size="icon" onClick={signOut}>
-            <LogOut className="h-5 w-5" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {"Notification" in window && Notification.permission !== "granted" && (
+              <Button variant="ghost" size="icon" onClick={requestPermission} title="Ativar notificações">
+                <Bell className="h-5 w-5 text-warning" />
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" onClick={signOut}>
+              <LogOut className="h-5 w-5" />
+            </Button>
+          </div>
         </header>
         <main className="flex-1 overflow-auto p-4 pb-20">
           <Outlet />
@@ -102,7 +112,17 @@ export default function AppLayout() {
               <NavLink key={item.path} item={item} />
             ))}
           </nav>
-          <div className="border-t border-sidebar-border p-3">
+          <div className="border-t border-sidebar-border p-3 space-y-1">
+            {"Notification" in window && Notification.permission !== "granted" && (
+              <Button
+                variant="ghost"
+                className="w-full justify-start gap-3 text-warning hover:text-warning hover:bg-warning/10"
+                onClick={requestPermission}
+              >
+                <Bell className="h-5 w-5" />
+                Ativar notificações
+              </Button>
+            )}
             <Button
               variant="ghost"
               className="w-full justify-start gap-3 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
