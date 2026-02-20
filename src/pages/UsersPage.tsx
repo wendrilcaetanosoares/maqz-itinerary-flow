@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -231,16 +231,13 @@ export default function UsersPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   {user.role ? (
-                    <Badge
-                      variant="outline"
-                      className={`text-xs ${roleColors[user.role]}`}
-                    >
+                    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${roleColors[user.role]}`}>
                       {roleLabels[user.role]}
-                    </Badge>
+                    </span>
                   ) : (
-                    <Badge variant="outline" className="text-muted-foreground text-xs">
+                    <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold text-muted-foreground border-border">
                       Sem permissão
-                    </Badge>
+                    </span>
                   )}
                   <Button variant="ghost" size="icon" onClick={() => openEdit(user)}>
                     <Pencil className="h-4 w-4 text-muted-foreground" />
