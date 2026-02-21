@@ -1,6 +1,32 @@
 import { useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+function isBusinessHour(): boolean {
+  const now = new Date();
+  const day = now.getDay(); // 0=Sun, 6=Sat
+  const hour = now.getHours();
+
+  if (day === 0) return false; // Sunday
+  if (day === 6) return hour >= 8 && hour < 14; // Saturday 08-14
+  return hour >= 8 && hour < 18; // Mon-Fri 08-18
+}
+
+const NOTIFIED_KEY = "maqz_last_notified_hour";
+
+function alreadyNotifiedThisHour(): boolean {
+  const stored = localStorage.getItem(NOTIFIED_KEY);
+  if (!stored) return false;
+  const now = new Date();
+  const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}`;
+  return stored === key;
+}
+
+function markNotifiedThisHour() {
+  const now = new Date();
+  const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}`;
+  localStorage.setItem(NOTIFIED_KEY, key);
+}
+
 export function useNotifications(userId: string | undefined) {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -14,33 +40,46 @@ export function useNotifications(userId: string | undefined) {
 
   const sendNotification = useCallback((title: string, body: string) => {
     if (Notification.permission !== "granted") return;
-    const n = new Notification(title, {
-      body,
-      icon: "/favicon.ico",
-      tag: "maqz-tasks",
-    });
-    n.onclick = () => {
-      window.focus();
-      n.close();
-    };
+    try {
+      const n = new Notification(title, {
+        body,
+        icon: "/pwa-192x192.png",
+        tag: "maqz-tasks",
+      });
+      n.onclick = () => {
+        window.focus();
+        n.close();
+      };
+    } catch {
+      // Notification API may not be available in some contexts
+    }
   }, []);
 
   const checkAndNotify = useCallback(async () => {
     if (!userId) return;
-    const { data: tasks } = await supabase
-      .from("tasks")
-      .select("id, status, client_name")
-      .in("status", ["pendente", "em_andamento"]);
+    if (!isBusinessHour()) return;
+    if (alreadyNotifiedThisHour()) return;
 
-    if (!tasks || tasks.length === 0) return;
+    try {
+      const { data: tasks } = await supabase
+        .from("tasks")
+        .select("id, status, client_name")
+        .in("status", ["pendente", "em_andamento"]);
 
-    const count = tasks.length;
-    sendNotification(
-      "🔔 Maqz Itinerário",
-      count === 1
-        ? `Você tem 1 tarefa pendente: ${tasks[0].client_name}`
-        : `Você tem ${count} tarefas pendentes ou em andamento`
-    );
+      if (!tasks || tasks.length === 0) return;
+
+      markNotifiedThisHour();
+
+      const count = tasks.length;
+      sendNotification(
+        "🔔 Maqz Itinerário",
+        count === 1
+          ? `Você tem 1 tarefa pendente: ${tasks[0].client_name}`
+          : `Você tem ${count} tarefas pendentes ou em andamento`
+      );
+    } catch {
+      // silent fail
+    }
   }, [userId, sendNotification]);
 
   // Subscribe to new tasks via realtime
@@ -58,18 +97,22 @@ export function useNotifications(userId: string | undefined) {
           filter: `user_id=eq.${userId}`,
         },
         async (payload) => {
-          // Fetch task info
-          const { data: task } = await supabase
-            .from("tasks")
-            .select("client_name, type")
-            .eq("id", (payload.new as { task_id: string }).task_id)
-            .single();
+          if (!isBusinessHour()) return;
+          try {
+            const { data: task } = await supabase
+              .from("tasks")
+              .select("client_name, type")
+              .eq("id", (payload.new as { task_id: string }).task_id)
+              .single();
 
-          if (task) {
-            sendNotification(
-              "📋 Nova tarefa atribuída!",
-              `Você recebeu uma nova tarefa: ${task.client_name}`
-            );
+            if (task) {
+              sendNotification(
+                "📋 Nova tarefa atribuída!",
+                `Você recebeu uma nova tarefa: ${task.client_name}`
+              );
+            }
+          } catch {
+            // silent
           }
         }
       )
@@ -84,13 +127,10 @@ export function useNotifications(userId: string | undefined) {
   useEffect(() => {
     if (!userId) return;
 
-    // Ask permission on mount
     requestPermission().then((granted) => {
       if (!granted) return;
-      // First check after 5 seconds (so it doesn't fire immediately on login)
       const initialTimeout = setTimeout(() => {
         checkAndNotify();
-        // Then every hour
         intervalRef.current = setInterval(checkAndNotify, 60 * 60 * 1000);
       }, 5000);
 
