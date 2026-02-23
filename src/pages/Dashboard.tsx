@@ -51,18 +51,19 @@ export default function Dashboard() {
   const stats = useMemo(() => ({
     total: filteredTasks.length,
     pendente: filteredTasks.filter((t) => t.status === "pendente").length,
-    em_andamento: filteredTasks.filter((t) => t.status === "em_andamento").length,
-    concluido: filteredTasks.filter((t) => t.status === "concluido").length,
+    concluida: filteredTasks.filter((t) => t.status === "concluida").length,
+    adiada: filteredTasks.filter((t) => t.status === "adiada").length,
+    cancelada: filteredTasks.filter((t) => t.status === "cancelada").length,
     atrasadas: filteredTasks.filter(
-      (t) => t.deadline && new Date(t.deadline) < now && t.status !== "concluido" && t.status !== "cancelado"
+      (t) => t.deadline && new Date(t.deadline) < now && t.status === "pendente"
     ).length,
   }), [filteredTasks]);
 
   const cards = [
     { label: "Total de Tarefas", value: stats.total, icon: ListTodo, color: "text-primary" },
     { label: "Pendentes", value: stats.pendente, icon: Clock, color: "text-warning" },
-    { label: "Em Andamento", value: stats.em_andamento, icon: ListTodo, color: "text-primary" },
-    { label: "Concluídas", value: stats.concluido, icon: CheckCircle2, color: "text-success" },
+    { label: "Concluídas", value: stats.concluida, icon: CheckCircle2, color: "text-success" },
+    { label: "Adiadas", value: stats.adiada, icon: Clock, color: "text-primary" },
     { label: "Atrasadas", value: stats.atrasadas, icon: AlertTriangle, color: "text-destructive" },
   ];
 

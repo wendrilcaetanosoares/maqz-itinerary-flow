@@ -313,7 +313,7 @@ export default function CalendarPage() {
               {selectedTask.deadline && (
                 <p className="text-xs text-muted-foreground">
                   ⏱ Prazo:{" "}
-                  <span className={isPast(parseISO(selectedTask.deadline)) && selectedTask.status !== "concluido" ? "text-destructive font-semibold" : ""}>
+                  <span className={isPast(parseISO(selectedTask.deadline)) && selectedTask.status === "pendente" ? "text-destructive font-semibold" : ""}>
                     {format(parseISO(selectedTask.deadline), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                   </span>
                 </p>

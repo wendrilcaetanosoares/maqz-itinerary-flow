@@ -13,7 +13,6 @@ import TaskActionButtons from "@/components/TaskActionButtons";
 import type { Database } from "@/integrations/supabase/types";
 
 type Task = Database["public"]["Tables"]["tasks"]["Row"];
-type TaskStatus = Database["public"]["Enums"]["task_status"];
 
 const typeLabels: Record<string, string> = {
   entrega: "Entrega", retirada: "Retirada", venda: "Venda",
@@ -28,17 +27,6 @@ const typeColors: Record<string, string> = {
   garantia: "bg-yellow-50 text-yellow-700 border-yellow-200",
   administrativo: "bg-gray-50 text-gray-700 border-gray-200",
   suporte: "bg-cyan-50 text-cyan-700 border-cyan-200",
-};
-
-const statusColors: Record<string, string> = {
-  pendente: "bg-warning/15 text-warning border-warning/30",
-  em_andamento: "bg-primary/15 text-primary border-primary/30",
-  concluido: "bg-success/15 text-success border-success/30",
-  cancelado: "bg-destructive/15 text-destructive border-destructive/30",
-};
-
-const statusLabels: Record<string, string> = {
-  pendente: "Pendente", em_andamento: "Em andamento", concluido: "Concluído", cancelado: "Cancelado",
 };
 
 const priorityDot: Record<string, string> = {
@@ -56,26 +44,18 @@ function mapsUrl(address: string, cep?: string | null) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
-const STATUS_FILTERS: { value: TaskStatus | "todos"; label: string }[] = [
-  { value: "todos", label: "Todos" },
-  { value: "pendente", label: "Pendentes" },
-  { value: "em_andamento", label: "Em andamento" },
-  { value: "concluido", label: "Concluídos" },
-  { value: "cancelado", label: "Cancelados" },
-];
-
 export default function Tasks() {
   const { canManageTasks } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<TaskStatus | "todos">("todos");
 
   const fetchTasks = useCallback(async () => {
     const { data } = await supabase
       .from("tasks")
       .select("*")
+      .eq("status", "pendente")
       .order("created_at", { ascending: false });
     if (data) setTasks(data);
     setLoading(false);
@@ -84,14 +64,11 @@ export default function Tasks() {
   useEffect(() => { fetchTasks(); }, [fetchTasks]);
 
   const isOverdue = (task: Task) =>
-    task.deadline && task.status !== "concluido" && task.status !== "cancelado"
+    task.deadline && task.status === "pendente"
     && isPast(parseISO(task.deadline));
 
-  // Filtering
   const filtered = tasks.filter((t) => {
-    const matchSearch = !search || t.client_name.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "todos" || t.status === statusFilter;
-    return matchSearch && matchStatus;
+    return !search || t.client_name.toLowerCase().includes(search.toLowerCase());
   });
 
   const overdueCount = tasks.filter(isOverdue).length;
@@ -103,7 +80,7 @@ export default function Tasks() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Tarefas</h1>
           <p className="text-muted-foreground text-sm">
-            {filtered.length} de {tasks.length} tarefa(s)
+            {filtered.length} tarefa(s) pendente(s)
             {overdueCount > 0 && (
               <span className="ml-2 text-destructive font-semibold">· {overdueCount} atrasada{overdueCount > 1 ? "s" : ""}</span>
             )}
@@ -120,8 +97,8 @@ export default function Tasks() {
         )}
       </div>
 
-      {/* Search + Status filters */}
-      <div className="mb-4 space-y-3">
+      {/* Search */}
+      <div className="mb-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -139,28 +116,6 @@ export default function Tasks() {
             </button>
           )}
         </div>
-
-        {/* Status pills */}
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-          {STATUS_FILTERS.map((f) => (
-            <button
-              key={f.value}
-              onClick={() => setStatusFilter(f.value)}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold border transition-colors ${
-                statusFilter === f.value
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-card text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
-              }`}
-            >
-              {f.label}
-              {f.value !== "todos" && (
-                <span className="ml-1 opacity-70">
-                  ({tasks.filter((t) => t.status === f.value).length})
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* List */}
@@ -172,14 +127,14 @@ export default function Tasks() {
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <p className="text-muted-foreground text-lg">
-              {search || statusFilter !== "todos" ? "Nenhuma tarefa encontrada com esses filtros" : "Nenhuma tarefa encontrada"}
+              {search ? "Nenhuma tarefa encontrada" : "Nenhuma tarefa pendente"}
             </p>
-            {(search || statusFilter !== "todos") && (
+            {search && (
               <button
-                onClick={() => { setSearch(""); setStatusFilter("todos"); }}
+                onClick={() => setSearch("")}
                 className="mt-2 text-sm text-primary hover:underline"
               >
-                Limpar filtros
+                Limpar busca
               </button>
             )}
           </CardContent>
@@ -207,8 +162,8 @@ export default function Tasks() {
                         </Badge>
                       )}
                     </div>
-                    <Badge className={`shrink-0 text-xs border ${statusColors[task.status]}`}>
-                      {statusLabels[task.status]}
+                    <Badge className="shrink-0 text-xs border bg-warning/15 text-warning border-warning/30">
+                      Pendente
                     </Badge>
                   </div>
 
