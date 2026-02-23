@@ -183,12 +183,12 @@ export default function CalendarPage() {
                     <p className="text-xs text-muted-foreground/50 text-center pt-4">—</p>
                   ) : (
                     dayTasks.map((task) => {
-                      const overdue = task.deadline && isPast(parseISO(task.deadline)) && task.status !== "concluido" && task.status !== "cancelado";
+                      const overdue = task.deadline && isPast(parseISO(task.deadline)) && task.status === "pendente";
                       return (
                         <button
                           key={task.id}
                           onClick={() => setSelectedTask(task)}
-                          className={`w-full text-left rounded-md border-l-2 bg-card shadow-sm p-2 hover:shadow-md transition-shadow ${priorityBorder[task.priority]} ${task.status === "concluido" ? "opacity-60" : ""}`}
+                          className={`w-full text-left rounded-md border-l-2 bg-card shadow-sm p-2 hover:shadow-md transition-shadow ${priorityBorder[task.priority]}`}
                         >
                           {/* Type dot + label */}
                           <div className="flex items-center gap-1 mb-1">
