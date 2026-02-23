@@ -92,7 +92,7 @@ export default function CalendarPage() {
 
   const totalWeekTasks = tasks.length;
   const overdueCount = tasks.filter(
-    (t) => t.deadline && isPast(parseISO(t.deadline)) && t.status !== "concluido" && t.status !== "cancelado"
+    (t) => t.deadline && isPast(parseISO(t.deadline)) && t.status === "pendente"
   ).length;
 
   return (
