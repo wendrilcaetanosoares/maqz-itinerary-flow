@@ -190,6 +190,7 @@ export type Database = {
           scheduled_time: string | null
           sector_id: string | null
           status: Database["public"]["Enums"]["task_status"]
+          status_justification: string | null
           type: Database["public"]["Enums"]["task_type"]
           updated_at: string
           value: number | null
@@ -211,6 +212,7 @@ export type Database = {
           scheduled_time?: string | null
           sector_id?: string | null
           status?: Database["public"]["Enums"]["task_status"]
+          status_justification?: string | null
           type: Database["public"]["Enums"]["task_type"]
           updated_at?: string
           value?: number | null
@@ -232,6 +234,7 @@ export type Database = {
           scheduled_time?: string | null
           sector_id?: string | null
           status?: Database["public"]["Enums"]["task_status"]
+          status_justification?: string | null
           type?: Database["public"]["Enums"]["task_type"]
           updated_at?: string
           value?: number | null
