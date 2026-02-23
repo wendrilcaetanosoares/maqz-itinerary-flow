@@ -290,7 +290,14 @@ export type Database = {
     Enums: {
       app_role: "admin" | "task_applier" | "employee"
       task_priority: "alta" | "media" | "baixa"
-      task_status: "pendente" | "em_andamento" | "concluido" | "cancelado"
+      task_status:
+        | "pendente"
+        | "em_andamento"
+        | "concluido"
+        | "cancelado"
+        | "concluida"
+        | "adiada"
+        | "cancelada"
       task_type:
         | "entrega"
         | "retirada"
@@ -428,7 +435,15 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "task_applier", "employee"],
       task_priority: ["alta", "media", "baixa"],
-      task_status: ["pendente", "em_andamento", "concluido", "cancelado"],
+      task_status: [
+        "pendente",
+        "em_andamento",
+        "concluido",
+        "cancelado",
+        "concluida",
+        "adiada",
+        "cancelada",
+      ],
       task_type: [
         "entrega",
         "retirada",
