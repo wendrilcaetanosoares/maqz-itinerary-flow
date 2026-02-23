@@ -38,16 +38,16 @@ const priorityBorder: Record<string, string> = {
 
 const statusColors: Record<string, string> = {
   pendente: "bg-warning/15 text-warning",
-  em_andamento: "bg-primary/15 text-primary",
-  concluido: "bg-success/15 text-success",
-  cancelado: "bg-destructive/15 text-destructive",
+  concluida: "bg-success/15 text-success",
+  adiada: "bg-primary/15 text-primary",
+  cancelada: "bg-destructive/15 text-destructive",
 };
 
 const statusLabels: Record<string, string> = {
   pendente: "Pendente",
-  em_andamento: "Em andamento",
-  concluido: "Concluído",
-  cancelado: "Cancelado",
+  concluida: "Concluída",
+  adiada: "Adiada",
+  cancelada: "Cancelada",
 };
 
 function mapsUrl(address: string, cep?: string | null) {
