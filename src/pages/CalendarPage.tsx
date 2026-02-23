@@ -76,6 +76,7 @@ export default function CalendarPage() {
     const { data } = await supabase
       .from("tasks")
       .select("*")
+      .eq("status", "pendente")
       .gte("scheduled_date", format(weekStart, "yyyy-MM-dd"))
       .lte("scheduled_date", format(weekEnd, "yyyy-MM-dd"))
       .order("scheduled_time", { ascending: true, nullsFirst: false });
