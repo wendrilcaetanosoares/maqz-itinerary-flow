@@ -38,16 +38,16 @@ const priorityBorder: Record<string, string> = {
 
 const statusColors: Record<string, string> = {
   pendente: "bg-warning/15 text-warning",
-  em_andamento: "bg-primary/15 text-primary",
-  concluido: "bg-success/15 text-success",
-  cancelado: "bg-destructive/15 text-destructive",
+  concluida: "bg-success/15 text-success",
+  adiada: "bg-primary/15 text-primary",
+  cancelada: "bg-destructive/15 text-destructive",
 };
 
 const statusLabels: Record<string, string> = {
   pendente: "Pendente",
-  em_andamento: "Em andamento",
-  concluido: "Concluído",
-  cancelado: "Cancelado",
+  concluida: "Concluída",
+  adiada: "Adiada",
+  cancelada: "Cancelada",
 };
 
 function mapsUrl(address: string, cep?: string | null) {
@@ -76,6 +76,7 @@ export default function CalendarPage() {
     const { data } = await supabase
       .from("tasks")
       .select("*")
+      .eq("status", "pendente")
       .gte("scheduled_date", format(weekStart, "yyyy-MM-dd"))
       .lte("scheduled_date", format(weekEnd, "yyyy-MM-dd"))
       .order("scheduled_time", { ascending: true, nullsFirst: false });
@@ -91,7 +92,7 @@ export default function CalendarPage() {
 
   const totalWeekTasks = tasks.length;
   const overdueCount = tasks.filter(
-    (t) => t.deadline && isPast(parseISO(t.deadline)) && t.status !== "concluido" && t.status !== "cancelado"
+    (t) => t.deadline && isPast(parseISO(t.deadline)) && t.status === "pendente"
   ).length;
 
   return (
@@ -182,12 +183,12 @@ export default function CalendarPage() {
                     <p className="text-xs text-muted-foreground/50 text-center pt-4">—</p>
                   ) : (
                     dayTasks.map((task) => {
-                      const overdue = task.deadline && isPast(parseISO(task.deadline)) && task.status !== "concluido" && task.status !== "cancelado";
+                      const overdue = task.deadline && isPast(parseISO(task.deadline)) && task.status === "pendente";
                       return (
                         <button
                           key={task.id}
                           onClick={() => setSelectedTask(task)}
-                          className={`w-full text-left rounded-md border-l-2 bg-card shadow-sm p-2 hover:shadow-md transition-shadow ${priorityBorder[task.priority]} ${task.status === "concluido" ? "opacity-60" : ""}`}
+                          className={`w-full text-left rounded-md border-l-2 bg-card shadow-sm p-2 hover:shadow-md transition-shadow ${priorityBorder[task.priority]}`}
                         >
                           {/* Type dot + label */}
                           <div className="flex items-center gap-1 mb-1">
@@ -312,7 +313,7 @@ export default function CalendarPage() {
               {selectedTask.deadline && (
                 <p className="text-xs text-muted-foreground">
                   ⏱ Prazo:{" "}
-                  <span className={isPast(parseISO(selectedTask.deadline)) && selectedTask.status !== "concluido" ? "text-destructive font-semibold" : ""}>
+                  <span className={isPast(parseISO(selectedTask.deadline)) && selectedTask.status === "pendente" ? "text-destructive font-semibold" : ""}>
                     {format(parseISO(selectedTask.deadline), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                   </span>
                 </p>

@@ -64,7 +64,7 @@ export function useNotifications(userId: string | undefined) {
       const { data: tasks } = await supabase
         .from("tasks")
         .select("id, status, client_name")
-        .in("status", ["pendente", "em_andamento"]);
+        .eq("status", "pendente");
 
       if (!tasks || tasks.length === 0) return;
 
