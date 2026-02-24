@@ -2,9 +2,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ListTodo, Clock, CheckCircle2, AlertTriangle, TrendingUp, Trophy } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { subDays } from "date-fns";
+import { Badge } from "@/components/ui/badge";
+import { CheckCircle2, XCircle, Clock, History, CalendarDays, User, MapPin, Phone } from "lucide-react";
+import { format, isToday, subDays } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import type { Database } from "@/integrations/supabase/types";
 
 type Task = Database["public"]["Tables"]["tasks"]["Row"];
@@ -16,88 +17,178 @@ const PERIODS = [
   { label: "Geral", days: 0 },
 ];
 
+const STATUS_CONFIG: Record<string, { label: string; icon: typeof CheckCircle2; badgeClass: string }> = {
+  concluida: { label: "Concluída", icon: CheckCircle2, badgeClass: "bg-success/15 text-success border-success/30" },
+  cancelada: { label: "Cancelada", icon: XCircle, badgeClass: "bg-destructive/15 text-destructive border-destructive/30" },
+  adiada: { label: "Adiada", icon: Clock, badgeClass: "bg-warning/15 text-warning border-warning/30" },
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  entrega: "Entrega",
+  retirada: "Retirada",
+  venda: "Venda",
+  manutencao: "Manutenção",
+  garantia: "Garantia",
+  administrativo: "Administrativo",
+  suporte: "Suporte",
+};
+
+function TaskCard({ task, profiles }: { task: Task; profiles: Profile[] }) {
+  const config = STATUS_CONFIG[task.status] || STATUS_CONFIG.concluida;
+  const StatusIcon = config.icon;
+
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-border bg-card p-4 transition-colors">
+      <StatusIcon className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+      <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <span className="font-semibold text-foreground truncate">{task.client_name || "Sem cliente"}</span>
+          <Badge variant="outline" className={config.badgeClass}>
+            {config.label}
+          </Badge>
+        </div>
+
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <CalendarDays className="h-3.5 w-3.5" />
+            {format(new Date(task.updated_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+          </span>
+          <span>{TYPE_LABELS[task.type] || task.type}</span>
+          {task.client_phone && (
+            <span className="flex items-center gap-1">
+              <Phone className="h-3.5 w-3.5" />
+              {task.client_phone}
+            </span>
+          )}
+          {task.client_address && (
+            <span className="flex items-center gap-1 truncate max-w-[200px]">
+              <MapPin className="h-3.5 w-3.5 shrink-0" />
+              {task.client_address}
+            </span>
+          )}
+        </div>
+
+        {task.status_justification && (
+          <p className="text-xs text-muted-foreground italic border-l-2 border-border pl-2">
+            {task.status_justification}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TaskSection({
+  title,
+  icon: Icon,
+  tasks,
+  profiles,
+  emptyMessage,
+  accentClass,
+}: {
+  title: string;
+  icon: typeof CheckCircle2;
+  tasks: Task[];
+  profiles: Profile[];
+  emptyMessage: string;
+  accentClass: string;
+}) {
+  if (tasks.length === 0) {
+    return (
+      <Card className="border-0 shadow-md">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <Icon className={`h-5 w-5 ${accentClass}`} />
+            {title}
+            <span className="text-xs font-normal text-muted-foreground">(0)</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground text-center py-4">{emptyMessage}</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="border-0 shadow-md">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold flex items-center gap-2">
+          <Icon className={`h-5 w-5 ${accentClass}`} />
+          {title}
+          <span className="text-xs font-normal text-muted-foreground">({tasks.length})</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {tasks.map((task) => (
+          <TaskCard key={task.id} task={task} profiles={profiles} />
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Dashboard() {
   const { user, profile, isAdmin } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [assignees, setAssignees] = useState<{ task_id: string; user_id: string; completed: boolean }[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState(30);
 
   useEffect(() => {
     if (!user) return;
-    const fetch = async () => {
+    const fetchData = async () => {
       setLoading(true);
-      const [tasksRes, assigneesRes, profilesRes] = await Promise.all([
-        supabase.from("tasks").select("*"),
-        supabase.from("task_assignees").select("task_id, user_id, completed"),
-        isAdmin ? supabase.from("profiles").select("*").order("name") : Promise.resolve({ data: [] }),
+      const [tasksRes, profilesRes] = await Promise.all([
+        supabase
+          .from("tasks")
+          .select("*")
+          .in("status", ["concluida", "cancelada", "adiada"])
+          .order("updated_at", { ascending: false }),
+        supabase.from("profiles").select("*"),
       ]);
       if (tasksRes.data) setTasks(tasksRes.data);
-      if (assigneesRes.data) setAssignees(assigneesRes.data);
       if (profilesRes.data) setProfiles(profilesRes.data);
       setLoading(false);
     };
-    fetch();
-  }, [user, isAdmin]);
+    fetchData();
+  }, [user]);
 
   const filteredTasks = useMemo(() => {
     if (period === 0) return tasks;
     const cutoff = subDays(new Date(), period).toISOString();
-    return tasks.filter((t) => t.created_at >= cutoff);
+    return tasks.filter((t) => t.updated_at >= cutoff);
   }, [tasks, period]);
 
-  const now = new Date();
-  const stats = useMemo(() => ({
-    total: filteredTasks.length,
-    pendente: filteredTasks.filter((t) => t.status === "pendente").length,
-    concluida: filteredTasks.filter((t) => t.status === "concluida").length,
-    adiada: filteredTasks.filter((t) => t.status === "adiada").length,
-    cancelada: filteredTasks.filter((t) => t.status === "cancelada").length,
-    atrasadas: filteredTasks.filter(
-      (t) => t.deadline && new Date(t.deadline) < now && t.status === "pendente"
-    ).length,
-  }), [filteredTasks]);
+  const completedToday = useMemo(
+    () => filteredTasks.filter((t) => t.status === "concluida" && isToday(new Date(t.updated_at))),
+    [filteredTasks]
+  );
 
-  const cards = [
-    { label: "Total de Tarefas", value: stats.total, icon: ListTodo, color: "text-primary" },
-    { label: "Pendentes", value: stats.pendente, icon: Clock, color: "text-warning" },
-    { label: "Concluídas", value: stats.concluida, icon: CheckCircle2, color: "text-success" },
-    { label: "Adiadas", value: stats.adiada, icon: Clock, color: "text-primary" },
-    { label: "Atrasadas", value: stats.atrasadas, icon: AlertTriangle, color: "text-destructive" },
-  ];
+  const canceled = useMemo(
+    () => filteredTasks.filter((t) => t.status === "cancelada"),
+    [filteredTasks]
+  );
 
-  // Per-employee stats
-  const employeeStats = useMemo(() => {
-    if (!isAdmin || profiles.length === 0) return [];
-
-    const taskIds = new Set(filteredTasks.map((t) => t.id));
-
-    return profiles.map((p) => {
-      const userAssignments = assignees.filter((a) => a.user_id === p.user_id && taskIds.has(a.task_id));
-      const total = userAssignments.length;
-      const completed = userAssignments.filter((a) => a.completed).length;
-      const pending = total - completed;
-      const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
-      return { name: p.name || "Sem nome", total, completed, pending, rate };
-    })
-      .filter((e) => e.total > 0)
-      .sort((a, b) => b.rate - a.rate || b.completed - a.completed);
-  }, [isAdmin, profiles, assignees, filteredTasks]);
-
-  const chartColors = ["hsl(217, 91%, 50%)", "hsl(142, 76%, 36%)", "hsl(27, 96%, 54%)", "hsl(38, 92%, 50%)", "hsl(0, 84%, 60%)"];
+  const postponed = useMemo(
+    () => filteredTasks.filter((t) => t.status === "adiada"),
+    [filteredTasks]
+  );
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            Olá, {profile?.name || "Usuário"} 👋
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <History className="h-6 w-6 text-primary" />
+            Histórico de Tarefas
           </h1>
-          <p className="text-muted-foreground">Resumo das suas tarefas</p>
+          <p className="text-muted-foreground text-sm">
+            Olá, {profile?.name || "Usuário"} — visualização do histórico
+          </p>
         </div>
 
-        {/* Period filter */}
         <div className="flex gap-1.5">
           {PERIODS.map((p) => (
             <button
@@ -115,101 +206,63 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        {cards.map((card) => (
-          <Card key={card.label} className="border-0 shadow-md">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{card.label}</CardTitle>
-              <card.icon className={`h-5 w-5 ${card.color}`} />
-            </CardHeader>
-            <CardContent>
-              <div className={`text-3xl font-bold ${card.color}`}>
-                {loading ? "—" : card.value}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Admin: Employee performance */}
-      {isAdmin && !loading && employeeStats.length > 0 && (
+      {loading ? (
+        <div className="text-center py-12 text-muted-foreground">Carregando histórico…</div>
+      ) : (
         <>
-          {/* Chart */}
-          <Card className="border-0 shadow-md">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-primary" />
-                Desempenho por Colaborador
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={employeeStats.slice(0, 10)} layout="vertical" margin={{ left: 0, right: 16 }}>
-                    <XAxis type="number" />
-                    <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 12 }} />
-                    <Tooltip
-                      formatter={(value: number, name: string) =>
-                        [value, name === "completed" ? "Concluídas" : "Pendentes"]
-                      }
-                      contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
-                    />
-                    <Bar dataKey="completed" name="Concluídas" fill="hsl(142, 76%, 36%)" radius={[0, 4, 4, 0]} />
-                    <Bar dataKey="pending" name="Pendentes" fill="hsl(38, 92%, 50%)" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Summary counters */}
+          <div className="grid gap-4 sm:grid-cols-3">
+            {[
+              { label: "Concluídas hoje", value: completedToday.length, color: "text-success" },
+              { label: "Canceladas", value: canceled.length, color: "text-destructive" },
+              { label: "Adiadas", value: postponed.length, color: "text-warning" },
+            ].map((s) => (
+              <Card key={s.label} className="border-0 shadow-md">
+                <CardContent className="flex items-center justify-between p-5">
+                  <span className="text-sm font-medium text-muted-foreground">{s.label}</span>
+                  <span className={`text-2xl font-bold ${s.color}`}>{s.value}</span>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
 
-          {/* Ranking table */}
-          <Card className="border-0 shadow-md">
-            <CardHeader>
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <Trophy className="h-5 w-5 text-warning" />
-                Ranking de Produtividade
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left">
-                      <th className="pb-2 font-medium text-muted-foreground">#</th>
-                      <th className="pb-2 font-medium text-muted-foreground">Colaborador</th>
-                      <th className="pb-2 font-medium text-muted-foreground text-center">Recebidas</th>
-                      <th className="pb-2 font-medium text-muted-foreground text-center">Concluídas</th>
-                      <th className="pb-2 font-medium text-muted-foreground text-center">Pendentes</th>
-                      <th className="pb-2 font-medium text-muted-foreground text-center">Taxa</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {employeeStats.map((e, i) => (
-                      <tr key={e.name} className="border-b border-border/50 last:border-0">
-                        <td className="py-3 font-bold text-muted-foreground">
-                          {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}`}
-                        </td>
-                        <td className="py-3 font-semibold text-foreground">{e.name}</td>
-                        <td className="py-3 text-center">{e.total}</td>
-                        <td className="py-3 text-center text-success font-semibold">{e.completed}</td>
-                        <td className="py-3 text-center text-warning font-semibold">{e.pending}</td>
-                        <td className="py-3 text-center">
-                          <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${
-                            e.rate >= 80 ? "bg-success/15 text-success" :
-                            e.rate >= 50 ? "bg-warning/15 text-warning" :
-                            "bg-destructive/15 text-destructive"
-                          }`}>
-                            {e.rate}%
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Sections */}
+          <TaskSection
+            title="Concluídas hoje"
+            icon={CheckCircle2}
+            tasks={completedToday}
+            profiles={profiles}
+            emptyMessage="Nenhuma tarefa concluída hoje."
+            accentClass="text-success"
+          />
+
+          <TaskSection
+            title="Tarefas canceladas"
+            icon={XCircle}
+            tasks={canceled}
+            profiles={profiles}
+            emptyMessage="Nenhuma tarefa cancelada no período."
+            accentClass="text-destructive"
+          />
+
+          <TaskSection
+            title="Tarefas adiadas"
+            icon={Clock}
+            tasks={postponed}
+            profiles={profiles}
+            emptyMessage="Nenhuma tarefa adiada no período."
+            accentClass="text-warning"
+          />
+
+          {/* Full history */}
+          <TaskSection
+            title="Histórico geral"
+            icon={History}
+            tasks={filteredTasks}
+            profiles={profiles}
+            emptyMessage="Nenhuma tarefa no período selecionado."
+            accentClass="text-primary"
+          />
         </>
       )}
     </div>
