@@ -1,12 +1,8 @@
 import { useState } from "react";
-import { CheckCircle2, Clock, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, XCircle, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,19 +10,25 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import TaskFormDialog from "@/components/TaskFormDialog";
+import type { Database } from "@/integrations/supabase/types";
+
+type Task = Database["public"]["Tables"]["tasks"]["Row"];
 
 interface Props {
   taskId: string;
   currentStatus: string;
   onUpdated: () => void;
+  task?: Task;
 }
 
-export default function TaskActionButtons({ taskId, currentStatus, onUpdated }: Props) {
-  const { user } = useAuth();
+export default function TaskActionButtons({ taskId, currentStatus, onUpdated, task }: Props) {
+  const { user, canManageTasks } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [adiarOpen, setAdiarOpen] = useState(false);
   const [cancelarOpen, setCancelarOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [newDate, setNewDate] = useState("");
   const [justification, setJustification] = useState("");
 
@@ -97,12 +99,25 @@ export default function TaskActionButtons({ taskId, currentStatus, onUpdated }: 
 
   const isDone = currentStatus === "concluida";
   const isCancelled = currentStatus === "cancelada";
-  const isAdiada = currentStatus === "adiada";
   const isInactive = isDone || isCancelled;
 
   return (
     <>
       <div className="flex items-center gap-1.5 mt-3 pt-3 border-t">
+        {/* Editar - only for admin/task_applier */}
+        {canManageTasks && !isInactive && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={loading}
+            onClick={(e) => { e.stopPropagation(); setEditOpen(true); }}
+            className="flex-1 gap-1.5 text-xs h-8 border-primary/40 text-primary hover:bg-primary/10 hover:border-primary"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Editar
+          </Button>
+        )}
+
         {/* Concluir */}
         <Button
           size="sm"
@@ -139,6 +154,16 @@ export default function TaskActionButtons({ taskId, currentStatus, onUpdated }: 
           Cancelar
         </Button>
       </div>
+
+      {/* Edit dialog */}
+      {canManageTasks && task && (
+        <TaskFormDialog
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          onSuccess={onUpdated}
+          task={task}
+        />
+      )}
 
       {/* Adiar dialog */}
       <Dialog open={adiarOpen} onOpenChange={setAdiarOpen}>
