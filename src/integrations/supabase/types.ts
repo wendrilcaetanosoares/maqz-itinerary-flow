@@ -184,6 +184,7 @@ export type Database = {
           deadline: string | null
           id: string
           machine: string | null
+          machine_photo_url: string | null
           observations: string | null
           priority: Database["public"]["Enums"]["task_priority"]
           scheduled_date: string | null
@@ -206,6 +207,7 @@ export type Database = {
           deadline?: string | null
           id?: string
           machine?: string | null
+          machine_photo_url?: string | null
           observations?: string | null
           priority?: Database["public"]["Enums"]["task_priority"]
           scheduled_date?: string | null
@@ -228,6 +230,7 @@ export type Database = {
           deadline?: string | null
           id?: string
           machine?: string | null
+          machine_photo_url?: string | null
           observations?: string | null
           priority?: Database["public"]["Enums"]["task_priority"]
           scheduled_date?: string | null

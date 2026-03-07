@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarIcon, Clock, X } from "lucide-react";
+import { CalendarIcon, Clock, X, Upload, ImageIcon, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,6 +30,7 @@ import type { Database } from "@/integrations/supabase/types";
 
 type TaskType = Database["public"]["Enums"]["task_type"];
 type TaskPriority = Database["public"]["Enums"]["task_priority"];
+type Task = Database["public"]["Tables"]["tasks"]["Row"];
 type Sector = Database["public"]["Tables"]["sectors"]["Row"];
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -37,6 +38,7 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  task?: Task | null;
 }
 
 const typeOptions: { value: TaskType; label: string }[] = [
@@ -66,9 +68,12 @@ const EMPTY_FORM = {
   observations: "",
 };
 
-export default function TaskFormDialog({ open, onOpenChange, onSuccess }: Props) {
+export default function TaskFormDialog({ open, onOpenChange, onSuccess, task }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isEditing = !!task;
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [sectors, setSectors] = useState<Sector[]>([]);
@@ -76,6 +81,12 @@ export default function TaskFormDialog({ open, onOpenChange, onSuccess }: Props)
   const [selectedAssignees, setSelectedAssignees] = useState<Profile[]>([]);
   const [assigneePopover, setAssigneePopover] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Photo state
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [existingPhotoUrl, setExistingPhotoUrl] = useState<string | null>(null);
+  const [removePhoto, setRemovePhoto] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -88,6 +99,55 @@ export default function TaskFormDialog({ open, onOpenChange, onSuccess }: Props)
     });
   }, [open]);
 
+  // Pre-fill form when editing
+  useEffect(() => {
+    if (!open) return;
+    if (task) {
+      setForm({
+        type: task.type,
+        sector_id: task.sector_id || "",
+        client_name: task.client_name || "",
+        client_phone: task.client_phone || "",
+        client_address: task.client_address || "",
+        client_cep: task.client_cep || "",
+        client_time_limit: task.client_time_limit || "",
+        machine: task.machine || "",
+        priority: task.priority,
+        scheduled_date: task.scheduled_date ? new Date(task.scheduled_date + "T00:00:00") : undefined,
+        scheduled_time: task.scheduled_time?.slice(0, 5) || "",
+        deadline: task.deadline ? new Date(task.deadline) : undefined,
+        value: task.value != null ? String(task.value) : "",
+        observations: task.observations || "",
+      });
+      setExistingPhotoUrl((task as any).machine_photo_url || null);
+      setRemovePhoto(false);
+      setPhotoFile(null);
+      setPhotoPreview(null);
+
+      // Load existing assignees
+      supabase
+        .from("task_assignees")
+        .select("user_id")
+        .eq("task_id", task.id)
+        .then(({ data }) => {
+          if (data && data.length > 0) {
+            supabase.from("profiles").select("*").in("user_id", data.map(a => a.user_id)).then(({ data: profiles }) => {
+              if (profiles) setSelectedAssignees(profiles);
+            });
+          } else {
+            setSelectedAssignees([]);
+          }
+        });
+    } else {
+      setForm(EMPTY_FORM);
+      setSelectedAssignees([]);
+      setExistingPhotoUrl(null);
+      setRemovePhoto(false);
+      setPhotoFile(null);
+      setPhotoPreview(null);
+    }
+  }, [open, task]);
+
   const set = <K extends keyof typeof EMPTY_FORM>(key: K, val: (typeof EMPTY_FORM)[K]) =>
     setForm((f) => ({ ...f, [key]: val }));
 
@@ -99,6 +159,35 @@ export default function TaskFormDialog({ open, onOpenChange, onSuccess }: Props)
     );
   };
 
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Imagem muito grande (máx. 5MB)", variant: "destructive" });
+      return;
+    }
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
+    setRemovePhoto(false);
+  };
+
+  const handleRemovePhoto = () => {
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    setRemovePhoto(true);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const uploadPhoto = async (): Promise<string | null> => {
+    if (!photoFile || !user) return null;
+    const ext = photoFile.name.split(".").pop();
+    const path = `${user.id}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("machine-photos").upload(path, photoFile);
+    if (error) throw error;
+    const { data } = supabase.storage.from("machine-photos").getPublicUrl(path);
+    return data.publicUrl;
+  };
+
   const handleSubmit = async () => {
     if (!form.type) { toast({ title: "Selecione o tipo da tarefa", variant: "destructive" }); return; }
     if (!form.client_name.trim()) { toast({ title: "Informe o nome do cliente", variant: "destructive" }); return; }
@@ -106,9 +195,17 @@ export default function TaskFormDialog({ open, onOpenChange, onSuccess }: Props)
 
     setSaving(true);
     try {
-      const { data: task, error } = await supabase.from("tasks").insert({
+      // Handle photo upload
+      let machine_photo_url: string | null | undefined = undefined;
+      if (photoFile) {
+        machine_photo_url = await uploadPhoto();
+      } else if (removePhoto) {
+        machine_photo_url = null;
+      }
+
+      const taskData: any = {
         type: form.type as TaskType,
-        sector_id: form.sector_id || null,
+        sector_id: form.sector_id && form.sector_id !== "none" ? form.sector_id : null,
         client_name: form.client_name.trim(),
         client_phone: form.client_phone.trim() || null,
         client_address: form.client_address.trim() || null,
@@ -121,37 +218,71 @@ export default function TaskFormDialog({ open, onOpenChange, onSuccess }: Props)
         deadline: form.deadline ? form.deadline.toISOString() : null,
         value: form.value ? parseFloat(form.value) : null,
         observations: form.observations.trim() || null,
-        creator_id: user.id,
-        status: "pendente",
-      }).select().single();
+      };
 
-      if (error) throw error;
-
-      // Insert assignees
-      if (task && selectedAssignees.length > 0) {
-        await supabase.from("task_assignees").insert(
-          selectedAssignees.map((p) => ({ task_id: task.id, user_id: p.user_id }))
-        );
+      if (machine_photo_url !== undefined) {
+        taskData.machine_photo_url = machine_photo_url;
       }
 
-      // Insert history
-      if (task) {
+      if (isEditing) {
+        // UPDATE
+        const { error } = await supabase.from("tasks").update(taskData).eq("id", task!.id);
+        if (error) throw error;
+
+        // Update assignees: delete old, insert new
+        await supabase.from("task_assignees").delete().eq("task_id", task!.id);
+        if (selectedAssignees.length > 0) {
+          await supabase.from("task_assignees").insert(
+            selectedAssignees.map((p) => ({ task_id: task!.id, user_id: p.user_id }))
+          );
+        }
+
+        // History
         await supabase.from("task_history").insert({
-          task_id: task.id,
+          task_id: task!.id,
           user_id: user.id,
-          action: "Tarefa criada",
+          action: "Tarefa editada",
           details: { type: form.type, priority: form.priority },
         });
+
+        toast({ title: "Tarefa atualizada com sucesso!" });
+      } else {
+        // INSERT
+        taskData.creator_id = user.id;
+        taskData.status = "pendente";
+
+        const { data: newTask, error } = await supabase.from("tasks").insert(taskData).select().single();
+        if (error) throw error;
+
+        if (newTask && selectedAssignees.length > 0) {
+          await supabase.from("task_assignees").insert(
+            selectedAssignees.map((p) => ({ task_id: newTask.id, user_id: p.user_id }))
+          );
+        }
+
+        if (newTask) {
+          await supabase.from("task_history").insert({
+            task_id: newTask.id,
+            user_id: user.id,
+            action: "Tarefa criada",
+            details: { type: form.type, priority: form.priority },
+          });
+        }
+
+        toast({ title: "Tarefa criada com sucesso!" });
       }
 
-      toast({ title: "Tarefa criada com sucesso!" });
       setForm(EMPTY_FORM);
       setSelectedAssignees([]);
+      setPhotoFile(null);
+      setPhotoPreview(null);
+      setExistingPhotoUrl(null);
+      setRemovePhoto(false);
       onSuccess();
       onOpenChange(false);
     } catch (err: unknown) {
       toast({
-        title: "Erro ao criar tarefa",
+        title: isEditing ? "Erro ao atualizar tarefa" : "Erro ao criar tarefa",
         description: err instanceof Error ? err.message : "Erro desconhecido",
         variant: "destructive",
       });
@@ -163,14 +294,22 @@ export default function TaskFormDialog({ open, onOpenChange, onSuccess }: Props)
   const handleClose = () => {
     setForm(EMPTY_FORM);
     setSelectedAssignees([]);
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    setExistingPhotoUrl(null);
+    setRemovePhoto(false);
     onOpenChange(false);
   };
+
+  const currentPhoto = photoPreview || (!removePhoto ? existingPhotoUrl : null);
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold">Nova Tarefa</DialogTitle>
+          <DialogTitle className="text-xl font-bold">
+            {isEditing ? "Editar Tarefa" : "Nova Tarefa"}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6 py-2">
@@ -342,6 +481,56 @@ export default function TaskFormDialog({ open, onOpenChange, onSuccess }: Props)
                 />
               </div>
 
+              {/* Machine Photo */}
+              <div className="space-y-2">
+                <Label>Foto da Máquina</Label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoSelect}
+                />
+                {currentPhoto ? (
+                  <div className="relative rounded-lg overflow-hidden border border-border bg-muted">
+                    <img
+                      src={currentPhoto}
+                      alt="Foto da máquina"
+                      className="w-full max-h-48 object-contain"
+                    />
+                    <div className="absolute top-2 right-2 flex gap-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="h-8 w-8 p-0"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <Upload className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        className="h-8 w-8 p-0"
+                        onClick={handleRemovePhoto}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border hover:border-primary/50 bg-muted/30 py-8 transition-colors cursor-pointer"
+                  >
+                    <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">Clique para adicionar foto</span>
+                  </button>
+                )}
+              </div>
+
               {/* Data/Hora agendada */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
@@ -442,7 +631,7 @@ export default function TaskFormDialog({ open, onOpenChange, onSuccess }: Props)
             disabled={saving}
             className="bg-accent text-accent-foreground hover:bg-accent/90 font-semibold px-6"
           >
-            {saving ? "Criando..." : "Criar Tarefa"}
+            {saving ? (isEditing ? "Salvando..." : "Criando...") : (isEditing ? "Salvar Alterações" : "Criar Tarefa")}
           </Button>
         </DialogFooter>
       </DialogContent>
