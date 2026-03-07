@@ -229,11 +229,23 @@ export default function Tasks() {
                     <p className="mt-2 text-xs text-muted-foreground line-clamp-2">{task.observations}</p>
                   )}
 
+                  {/* Machine photo */}
+                  {(task as any).machine_photo_url && (
+                    <div className="mt-2 rounded-lg overflow-hidden border border-border bg-muted">
+                      <img
+                        src={(task as any).machine_photo_url}
+                        alt="Foto da máquina"
+                        className="w-full max-h-32 object-contain"
+                      />
+                    </div>
+                  )}
+
                   {/* Action buttons */}
                   <TaskActionButtons
                     taskId={task.id}
                     currentStatus={task.status}
                     onUpdated={fetchTasks}
+                    task={task}
                   />
                 </CardContent>
               </Card>
