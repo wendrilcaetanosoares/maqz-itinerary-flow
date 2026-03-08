@@ -3,8 +3,8 @@ import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, XCircle, Clock, History, CalendarDays, User, MapPin, Phone } from "lucide-react";
-import { format, isToday, subDays } from "date-fns";
+import { CheckCircle2, XCircle, Clock, History, CalendarDays, User, MapPin, Phone, Trophy, Medal } from "lucide-react";
+import { format, isToday, subDays, startOfWeek, endOfWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -138,10 +138,18 @@ function TaskSection({
   );
 }
 
+interface RankingEntry {
+  user_id: string;
+  name: string;
+  total_points: number;
+  task_count: number;
+}
+
 export default function Dashboard() {
   const { user, profile, isAdmin } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [ranking, setRanking] = useState<RankingEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState(30);
 
@@ -149,16 +157,47 @@ export default function Dashboard() {
     if (!user) return;
     const fetchData = async () => {
       setLoading(true);
-      const [tasksRes, profilesRes] = await Promise.all([
+
+      const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString();
+      const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 }).toISOString();
+
+      const [tasksRes, profilesRes, pointsRes] = await Promise.all([
         supabase
           .from("tasks")
           .select("*")
           .in("status", ["concluida", "cancelada", "adiada"])
           .order("updated_at", { ascending: false }),
         supabase.from("profiles").select("*"),
+        supabase
+          .from("user_points")
+          .select("user_id, points")
+          .gte("created_at", weekStart)
+          .lte("created_at", weekEnd),
       ]);
+
       if (tasksRes.data) setTasks(tasksRes.data);
-      if (profilesRes.data) setProfiles(profilesRes.data);
+      const profilesList = profilesRes.data || [];
+      setProfiles(profilesList);
+
+      // Aggregate ranking
+      if (pointsRes.data) {
+        const agg: Record<string, { points: number; count: number }> = {};
+        for (const p of pointsRes.data) {
+          if (!agg[p.user_id]) agg[p.user_id] = { points: 0, count: 0 };
+          agg[p.user_id].points += p.points;
+          agg[p.user_id].count += 1;
+        }
+        const entries: RankingEntry[] = Object.entries(agg)
+          .map(([uid, data]) => ({
+            user_id: uid,
+            name: profilesList.find((pr) => pr.user_id === uid)?.name || "Usuário",
+            total_points: data.points,
+            task_count: data.count,
+          }))
+          .sort((a, b) => b.total_points - a.total_points);
+        setRanking(entries);
+      }
+
       setLoading(false);
     };
     fetchData();
@@ -235,6 +274,58 @@ export default function Dashboard() {
               </Card>
             ))}
           </div>
+
+          {/* Ranking da Semana */}
+          <Card className="border-0 shadow-md">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Trophy className="h-5 w-5 text-warning" />
+                Ranking da Semana
+                <span className="text-xs font-normal text-muted-foreground">
+                  ({format(startOfWeek(new Date(), { weekStartsOn: 1 }), "dd/MM", { locale: ptBR })} – {format(endOfWeek(new Date(), { weekStartsOn: 1 }), "dd/MM", { locale: ptBR })})
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {ranking.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Nenhuma pontuação registrada esta semana.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {ranking.map((entry, index) => (
+                    <div
+                      key={entry.user_id}
+                      className={`flex items-center gap-3 rounded-lg border p-3 transition-colors ${
+                        index === 0
+                          ? "border-warning/40 bg-warning/5"
+                          : index === 1
+                          ? "border-muted-foreground/20 bg-muted/30"
+                          : index === 2
+                          ? "border-orange-400/20 bg-orange-50/30 dark:bg-orange-950/10"
+                          : "border-border bg-card"
+                      }`}
+                    >
+                      <span className={`text-lg font-bold w-8 text-center ${
+                        index === 0 ? "text-warning" : index === 1 ? "text-muted-foreground" : index === 2 ? "text-orange-500" : "text-muted-foreground"
+                      }`}>
+                        {index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `${index + 1}º`}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <span className="font-semibold text-foreground truncate block">{entry.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {entry.task_count} {entry.task_count === 1 ? "tarefa concluída" : "tarefas concluídas"}
+                        </span>
+                      </div>
+                      <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 font-bold">
+                        {entry.total_points} pts
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Sections */}
           <TaskSection
