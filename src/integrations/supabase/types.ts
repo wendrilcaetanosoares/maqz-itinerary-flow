@@ -252,6 +252,41 @@ export type Database = {
           },
         ]
       }
+      user_points: {
+        Row: {
+          created_at: string
+          id: string
+          points: number
+          task_id: string
+          task_type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          points: number
+          task_id: string
+          task_type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          points?: number
+          task_id?: string
+          task_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_points_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
@@ -276,6 +311,7 @@ export type Database = {
     }
     Functions: {
       can_manage_tasks: { Args: { _user_id: string }; Returns: boolean }
+      get_task_points: { Args: { task_type: string }; Returns: number }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
