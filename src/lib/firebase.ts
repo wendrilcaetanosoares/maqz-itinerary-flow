@@ -1,27 +1,54 @@
-import { initializeApp } from "firebase/app";
-import { getMessaging, getToken, onMessage, isSupported } from "firebase/messaging";
+import { initializeApp, FirebaseApp } from "firebase/app";
+import { getMessaging, getToken, onMessage, isSupported, Messaging } from "firebase/messaging";
 import { supabase } from "@/integrations/supabase/client";
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-};
+let firebaseApp: FirebaseApp | null = null;
+let messagingInstance: Messaging | null = null;
+let firebaseConfig: Record<string, string> | null = null;
+let vapidKey: string = "";
 
-const app = initializeApp(firebaseConfig);
+async function loadFirebaseConfig() {
+  if (firebaseConfig) return firebaseConfig;
 
-let messagingInstance: ReturnType<typeof getMessaging> | null = null;
+  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+  const res = await fetch(
+    `https://${projectId}.supabase.co/functions/v1/firebase-config`,
+    {
+      headers: {
+        "Content-Type": "application/json",
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      },
+    }
+  );
 
-export async function getFirebaseMessaging() {
+  const data = await res.json();
+  vapidKey = data.vapidKey || "";
+  firebaseConfig = {
+    apiKey: data.apiKey,
+    authDomain: data.authDomain,
+    projectId: data.projectId,
+    storageBucket: data.storageBucket,
+    messagingSenderId: data.messagingSenderId,
+    appId: data.appId,
+  };
+  return firebaseConfig;
+}
+
+async function getApp() {
+  if (firebaseApp) return firebaseApp;
+  const config = await loadFirebaseConfig();
+  firebaseApp = initializeApp(config);
+  return firebaseApp;
+}
+
+export async function getFirebaseMessaging(): Promise<Messaging | null> {
   if (messagingInstance) return messagingInstance;
   const supported = await isSupported();
   if (!supported) {
-    console.warn("Firebase Messaging not supported in this browser");
+    console.warn("Firebase Messaging not supported");
     return null;
   }
+  const app = await getApp();
   messagingInstance = getMessaging(app);
   return messagingInstance;
 }
@@ -29,36 +56,29 @@ export async function getFirebaseMessaging() {
 export async function requestPushPermissionAndToken(userId: string): Promise<string | null> {
   try {
     const permission = await Notification.requestPermission();
-    if (permission !== "granted") {
-      console.log("Notification permission denied");
-      return null;
-    }
+    if (permission !== "granted") return null;
 
     const messaging = await getFirebaseMessaging();
     if (!messaging) return null;
 
+    const config = await loadFirebaseConfig();
+
     // Send config to service worker
     const registration = await navigator.serviceWorker.getRegistration("/firebase-messaging-sw.js");
     if (registration?.active) {
-      registration.active.postMessage({
-        type: "FIREBASE_CONFIG",
-        config: firebaseConfig,
-      });
+      registration.active.postMessage({ type: "FIREBASE_CONFIG", config });
     }
 
-    const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
     const token = await getToken(messaging, {
       vapidKey,
       serviceWorkerRegistration: registration,
     });
 
     if (token) {
-      // Save token to database
-      await supabase.from("fcm_tokens").upsert(
+      await supabase.from("fcm_tokens" as any).upsert(
         { user_id: userId, token, updated_at: new Date().toISOString() },
         { onConflict: "user_id,token" }
       );
-      console.log("FCM token saved");
     }
 
     return token;
