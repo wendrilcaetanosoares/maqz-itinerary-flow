@@ -275,6 +275,58 @@ export default function Dashboard() {
             ))}
           </div>
 
+          {/* Ranking da Semana */}
+          <Card className="border-0 shadow-md">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Trophy className="h-5 w-5 text-warning" />
+                Ranking da Semana
+                <span className="text-xs font-normal text-muted-foreground">
+                  ({format(startOfWeek(new Date(), { weekStartsOn: 1 }), "dd/MM", { locale: ptBR })} – {format(endOfWeek(new Date(), { weekStartsOn: 1 }), "dd/MM", { locale: ptBR })})
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {ranking.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Nenhuma pontuação registrada esta semana.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {ranking.map((entry, index) => (
+                    <div
+                      key={entry.user_id}
+                      className={`flex items-center gap-3 rounded-lg border p-3 transition-colors ${
+                        index === 0
+                          ? "border-warning/40 bg-warning/5"
+                          : index === 1
+                          ? "border-muted-foreground/20 bg-muted/30"
+                          : index === 2
+                          ? "border-orange-400/20 bg-orange-50/30 dark:bg-orange-950/10"
+                          : "border-border bg-card"
+                      }`}
+                    >
+                      <span className={`text-lg font-bold w-8 text-center ${
+                        index === 0 ? "text-warning" : index === 1 ? "text-muted-foreground" : index === 2 ? "text-orange-500" : "text-muted-foreground"
+                      }`}>
+                        {index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `${index + 1}º`}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <span className="font-semibold text-foreground truncate block">{entry.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {entry.task_count} {entry.task_count === 1 ? "tarefa concluída" : "tarefas concluídas"}
+                        </span>
+                      </div>
+                      <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 font-bold">
+                        {entry.total_points} pts
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Sections */}
           <TaskSection
             title="Concluídas hoje"
