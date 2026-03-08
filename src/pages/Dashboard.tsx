@@ -138,10 +138,18 @@ function TaskSection({
   );
 }
 
+interface RankingEntry {
+  user_id: string;
+  name: string;
+  total_points: number;
+  task_count: number;
+}
+
 export default function Dashboard() {
   const { user, profile, isAdmin } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [ranking, setRanking] = useState<RankingEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState(30);
 
@@ -149,16 +157,47 @@ export default function Dashboard() {
     if (!user) return;
     const fetchData = async () => {
       setLoading(true);
-      const [tasksRes, profilesRes] = await Promise.all([
+
+      const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString();
+      const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 }).toISOString();
+
+      const [tasksRes, profilesRes, pointsRes] = await Promise.all([
         supabase
           .from("tasks")
           .select("*")
           .in("status", ["concluida", "cancelada", "adiada"])
           .order("updated_at", { ascending: false }),
         supabase.from("profiles").select("*"),
+        supabase
+          .from("user_points")
+          .select("user_id, points")
+          .gte("created_at", weekStart)
+          .lte("created_at", weekEnd),
       ]);
+
       if (tasksRes.data) setTasks(tasksRes.data);
-      if (profilesRes.data) setProfiles(profilesRes.data);
+      const profilesList = profilesRes.data || [];
+      setProfiles(profilesList);
+
+      // Aggregate ranking
+      if (pointsRes.data) {
+        const agg: Record<string, { points: number; count: number }> = {};
+        for (const p of pointsRes.data) {
+          if (!agg[p.user_id]) agg[p.user_id] = { points: 0, count: 0 };
+          agg[p.user_id].points += p.points;
+          agg[p.user_id].count += 1;
+        }
+        const entries: RankingEntry[] = Object.entries(agg)
+          .map(([uid, data]) => ({
+            user_id: uid,
+            name: profilesList.find((pr) => pr.user_id === uid)?.name || "Usuário",
+            total_points: data.points,
+            task_count: data.count,
+          }))
+          .sort((a, b) => b.total_points - a.total_points);
+        setRanking(entries);
+      }
+
       setLoading(false);
     };
     fetchData();
