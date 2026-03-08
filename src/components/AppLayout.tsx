@@ -7,9 +7,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useNotifications } from "@/hooks/useNotifications";
 
 const navItems = [
-  { label: "Painel", icon: LayoutDashboard, path: "/" },
+  { label: "Calendário", icon: Calendar, path: "/" },
   { label: "Tarefas", icon: ListTodo, path: "/tarefas" },
-  { label: "Calendário", icon: Calendar, path: "/calendario" },
+  { label: "Painel", icon: LayoutDashboard, path: "/painel" },
   { label: "Usuários", icon: Users, path: "/usuarios", adminOnly: true },
   { label: "Setores", icon: Building2, path: "/setores", adminOnly: true },
 ];
