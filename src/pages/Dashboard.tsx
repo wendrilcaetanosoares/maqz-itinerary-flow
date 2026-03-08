@@ -3,8 +3,8 @@ import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, XCircle, Clock, History, CalendarDays, User, MapPin, Phone } from "lucide-react";
-import { format, isToday, subDays } from "date-fns";
+import { CheckCircle2, XCircle, Clock, History, CalendarDays, User, MapPin, Phone, Trophy, Medal } from "lucide-react";
+import { format, isToday, subDays, startOfWeek, endOfWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Database } from "@/integrations/supabase/types";
 
