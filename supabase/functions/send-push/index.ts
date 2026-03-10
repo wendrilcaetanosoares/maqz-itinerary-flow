@@ -122,8 +122,6 @@ serve(async (req) => {
     const firebaseProjectId = Deno.env.get("FIREBASE_PROJECT_ID");
     if (!firebaseProjectId) throw new Error("FIREBASE_PROJECT_ID not configured");
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     const payload: PushPayload = await req.json();
