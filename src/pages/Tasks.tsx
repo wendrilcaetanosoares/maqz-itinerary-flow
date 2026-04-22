@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { SignedImage } from "@/components/SignedImage";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
