@@ -184,8 +184,8 @@ export default function TaskFormDialog({ open, onOpenChange, onSuccess, task }: 
     const path = `${user.id}/${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from("machine-photos").upload(path, photoFile);
     if (error) throw error;
-    const { data } = supabase.storage.from("machine-photos").getPublicUrl(path);
-    return data.publicUrl;
+    // Store the path, not the public URL (bucket is private)
+    return path;
   };
 
   const handleSubmit = async () => {
