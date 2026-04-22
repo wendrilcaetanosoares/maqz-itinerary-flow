@@ -15,6 +15,16 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // Only allow calls from internal triggers using the service role key
+    const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+    if (token !== supabaseServiceKey) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     const { type, record, old_record } = await req.json();

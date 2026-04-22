@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { SignedImage } from "@/components/SignedImage";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
@@ -232,8 +233,8 @@ export default function Tasks() {
                   {/* Machine photo */}
                   {(task as any).machine_photo_url && (
                     <div className="mt-2 rounded-lg overflow-hidden border border-border bg-muted">
-                      <img
-                        src={(task as any).machine_photo_url}
+                      <SignedImage
+                        path={(task as any).machine_photo_url}
                         alt="Foto da máquina"
                         className="w-full max-h-32 object-contain"
                       />

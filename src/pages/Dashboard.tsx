@@ -1,4 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
+import { SignedImage } from "@/components/SignedImage";
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -76,8 +77,8 @@ function TaskCard({ task, profiles }: { task: Task; profiles: Profile[] }) {
 
         {(task as any).machine_photo_url && (
           <div className="mt-2 rounded-md overflow-hidden border border-border bg-muted max-w-[200px]">
-            <img
-              src={(task as any).machine_photo_url}
+            <SignedImage
+              path={(task as any).machine_photo_url}
               alt="Foto da máquina"
               className="w-full max-h-24 object-contain"
             />
