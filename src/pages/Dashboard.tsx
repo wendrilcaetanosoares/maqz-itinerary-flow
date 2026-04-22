@@ -76,8 +76,8 @@ function TaskCard({ task, profiles }: { task: Task; profiles: Profile[] }) {
 
         {(task as any).machine_photo_url && (
           <div className="mt-2 rounded-md overflow-hidden border border-border bg-muted max-w-[200px]">
-            <img
-              src={(task as any).machine_photo_url}
+            <SignedImage
+              path={(task as any).machine_photo_url}
               alt="Foto da máquina"
               className="w-full max-h-24 object-contain"
             />
